@@ -254,6 +254,8 @@ app.post('/chat', async function(req, res) {
       return res.status(500).json({ error: 'API key not configured' });
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 55000); // 55 second timeout
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -266,8 +268,10 @@ app.post('/chat', async function(req, res) {
         max_tokens: 1200,
         system: SYSTEM_PROMPT,
         messages: messages
-      })
+      }),
+      signal: controller.signal
     });
+    clearTimeout(timeout);
 
     const data = await response.json();
 
@@ -289,6 +293,22 @@ app.post('/chat', async function(req, res) {
   } catch (err) {
     res.status(500).json({ error: 'Server error: ' + err.message });
   }
+});
+
+
+// KEEP ALIVE - ping every 14 minutes to prevent Render spin down
+const SELF_URL = 'https://jyotishai-backend.onrender.com';
+setInterval(async function() {
+  try {
+    await fetch(SELF_URL + '/ping');
+    console.log('Keep alive ping sent');
+  } catch(e) {
+    console.log('Keep alive failed:', e.message);
+  }
+}, 14 * 60 * 1000); // 14 minutes
+
+app.get('/ping', function(req, res) {
+  res.json({ status: 'alive', time: new Date().toISOString() });
 });
 
 const PORT = process.env.PORT || 3000;
