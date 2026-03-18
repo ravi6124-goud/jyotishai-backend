@@ -229,6 +229,23 @@ ADDITIONAL: Dasha, Tarot, Numerology, Vivah Milan, Muhurta, Ratna Shastra.
 
 STYLE: Warm, mystical. Sanskrit + Hindi/English. Reply in user's language. Max 3 paragraphs. End with: "Note: Jyotish aatmik margdarshan ke liye hai."`;
 
+
+app.get('/test-api', async function(req, res) {
+  try {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return res.json({ error: 'No API key!' });
+    const r = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 50, messages: [{ role: 'user', content: 'Say OK' }] })
+    });
+    const data = await r.json();
+    res.json({ status: r.status, reply: data.content ? data.content[0].text : data });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 app.post('/chat', async function(req, res) {
   try {
     const messages = req.body.messages;
@@ -257,8 +274,7 @@ app.post('/chat', async function(req, res) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 55000); // 55 second timeout
-    const apiController = new AbortController();
-    const apiTimeout = setTimeout(() => apiController.abort(), 45000);
+    console.log('Calling Anthropic API...');
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -268,14 +284,13 @@ app.post('/chat', async function(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 800,
-        system: SYSTEM_PROMPT,
+        max_tokens: 500,
+        system: 'You are a Vedic astrologer. Reply in 2-3 sentences max. Current year is 2026.',
         messages: messages
-      }),
-      signal: apiController.signal
+      })
     });
-    clearTimeout(apiTimeout);
     clearTimeout(timeout);
+    console.log('Anthropic response status:', response.status);
 
     const data = await response.json();
 
