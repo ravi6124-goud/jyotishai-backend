@@ -225,16 +225,9 @@ VERIFIED EXAMPLE:
 - Guru (Jupiter): Mithun until May 2026, then Kark
 - Rahu: Meen Rashi, Ketu: Kanya Rashi
 
-ADDITIONAL EXPERTISE:
-- Vimshottari Dasha: Calculate current Mahadasha and Antardasha for 2026
-- Tarot: Draw 3 cards Past/Present/Future from Major Arcana with deep interpretation
-- Prashna Kundli: Answer specific question with Yes/No and detailed explanation
-- Numerology: Janm Ank, Bhagya Ank, Naam Ank with lucky numbers/colors/days
-- Vivah Milan: All 8 Kootas, score out of 36, Mangal Dosha check
-- Muhurta: Best dates/times from Panchang for events
-- Ratna Shastra: Gemstone based on Lagna with mantra and wearing instructions
+ADDITIONAL: Dasha, Tarot, Numerology, Vivah Milan, Muhurta, Ratna Shastra.
 
-STYLE: Warm, wise, mystical. Use Sanskrit terms with Hindi/English explanation. Reply in same language as user. Keep 3-5 paragraphs. End every response with: "Note: Jyotish aatmik margdarshan ke liye hai. Apne vivek se nirnay lein."`;
+STYLE: Warm, mystical. Sanskrit + Hindi/English. Reply in user's language. Max 3 paragraphs. End with: "Note: Jyotish aatmik margdarshan ke liye hai."`;
 
 app.post('/chat', async function(req, res) {
   try {
@@ -264,6 +257,8 @@ app.post('/chat', async function(req, res) {
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 55000); // 55 second timeout
+    const apiController = new AbortController();
+    const apiTimeout = setTimeout(() => apiController.abort(), 45000);
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -273,12 +268,13 @@ app.post('/chat', async function(req, res) {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 1200,
+        max_tokens: 800,
         system: SYSTEM_PROMPT,
         messages: messages
       }),
-      signal: controller.signal
+      signal: apiController.signal
     });
+    clearTimeout(apiTimeout);
     clearTimeout(timeout);
 
     const data = await response.json();
