@@ -5,12 +5,20 @@ const crypto = require('crypto');
 const app = express();
 
 app.use(cors({
-  origin: ['https://ravi6124-goud.github.io', 'http://localhost:3000'],
-  methods: ['GET', 'POST', 'PATCH'],
-  allowedHeaders: ['Content-Type']
+  origin: '*',
+  methods: ['GET', 'POST', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
+app.options('*', cors());
+
 app.use(express.json());
+app.use(function(err, req, res, next) {
+  if (err.type === 'entity.parse.failed') {
+    return res.status(400).json({ error: 'Invalid JSON' });
+  }
+  next(err);
+});
 
 const SUPABASE_URL = 'https://mqbpmjnufegoyrizarsf.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
