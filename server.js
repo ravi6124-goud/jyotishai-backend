@@ -270,58 +270,55 @@ async function calculateChart(dob, birth_time, birth_place) {
     if (Array.isArray(data.output) && data.output.length > 0) console.log('First item:', JSON.stringify(data.output[0]).substring(0, 300));
 
     // Extract Sun, Moon, Ascendant
-    // API returns {statusCode, output} where output is array
-    var planets = [];
-    if (data.output && Array.isArray(data.output)) {
-      planets = data.output;
-    } else if (Array.isArray(data)) {
-      planets = data;
-    } else if (data.planets) {
-      planets = data.planets;
+    // API returns {statusCode, output} where output is OBJECT with named keys
+    // e.g. output.Sun, output.Moon, output.Ascendant
+    var output = data.output || {};
+    console.log('Output keys:', Object.keys(output).slice(0, 10));
+
+    // Try object format first (new format)
+    var sunData = output.Sun || output.sun || null;
+    var moonData = output.Moon || output.moon || null;
+    var lagnaData = output.Ascendant || output.ascendant || output.Lagna || null;
+
+    // Fallback: array format
+    if (!sunData && Array.isArray(output)) {
+      for (var p of output) {
+        var name = (p.name || p.localized_name || '').toLowerCase();
+        if (name === 'sun' || p.id === 0) sunData = p;
+        else if (name === 'moon' || p.id === 1) moonData = p;
+        else if (name === 'ascendant' || name === 'lagna' || p.id === 100) lagnaData = p;
+      }
     }
 
-    console.log('Total planets found:', planets.length);
-    if (planets.length > 0) console.log('First planet sample:', JSON.stringify(planets[0]));
-
-    var sunData = null, moonData = null, lagnaData = null;
-    for (var p of planets) {
-      var name = (p.name || '').toLowerCase();
-      var id = p.id;
-      if (id === 0 || name === 'sun' || name === 'surya') sunData = p;
-      else if (id === 1 || name === 'moon' || name === 'chandra') moonData = p;
-      else if (id === 100 || name === 'ascendant' || name === 'lagna' || name === 'asc') lagnaData = p;
-    }
-    console.log('Sun found:', sunData ? sunData.name : 'NO');
-    console.log('Moon found:', moonData ? moonData.name : 'NO');
-    console.log('Lagna found:', lagnaData ? lagnaData.name : 'NO');
+    console.log('Sun found:', sunData ? 'YES' : 'NO');
+    console.log('Moon found:', moonData ? 'YES' : 'NO');
+    console.log('Lagna found:', lagnaData ? 'YES' : 'NO');
 
     // Build result
     var result = {};
 
+    // API gives current_sign (0-based index) and zodiac_sign_name directly
     if (sunData) {
-      var sunRashiIdx = sunData.zodiac_sign_id !== undefined ? sunData.zodiac_sign_id :
-                        sunData.rasi_id !== undefined ? sunData.rasi_id :
-                        Math.floor((sunData.normDegree || sunData.degree || 0) / 30);
-      result.sun_rashi = RASHIS[sunRashiIdx] || sunData.zodiac_sign || sunData.rasi || 'Unknown';
-      result.sun_degrees = (sunData.normDegree || sunData.degree || 0).toFixed(2);
+      var sunIdx = sunData.current_sign !== undefined ? sunData.current_sign : Math.floor((sunData.normDegree || 0) / 30);
+      result.sun_rashi = RASHIS[sunIdx] || sunData.zodiac_sign_name || 'Unknown';
+      result.sun_degrees = (sunData.normDegree || 0).toFixed(2);
+      console.log('Sun:', result.sun_rashi, sunIdx, sunData.zodiac_sign_name);
     }
 
     if (moonData) {
-      var moonRashiIdx = moonData.zodiac_sign_id !== undefined ? moonData.zodiac_sign_id :
-                         moonData.rasi_id !== undefined ? moonData.rasi_id :
-                         Math.floor((moonData.normDegree || moonData.degree || 0) / 30);
-      result.moon_rashi = RASHIS[moonRashiIdx] || moonData.zodiac_sign || moonData.rasi || 'Unknown';
-      result.moon_degrees = (moonData.normDegree || moonData.degree || 0).toFixed(2);
-      result.nakshatra = moonData.nakshatra || moonData.nakshatraName || '';
+      var moonIdx = moonData.current_sign !== undefined ? moonData.current_sign : Math.floor((moonData.normDegree || 0) / 30);
+      result.moon_rashi = RASHIS[moonIdx] || moonData.zodiac_sign_name || 'Unknown';
+      result.moon_degrees = (moonData.normDegree || 0).toFixed(2);
+      result.nakshatra = moonData.nakshatra_name || moonData.nakshatraName || moonData.nakshatra || '';
       result.nakshatra_pada = moonData.nakshatra_pada || moonData.pada || '';
+      console.log('Moon:', result.moon_rashi, moonIdx, moonData.zodiac_sign_name);
     }
 
     if (lagnaData) {
-      var lagnaRashiIdx = lagnaData.zodiac_sign_id !== undefined ? lagnaData.zodiac_sign_id :
-                          lagnaData.rasi_id !== undefined ? lagnaData.rasi_id :
-                          Math.floor((lagnaData.normDegree || lagnaData.degree || 0) / 30);
-      result.lagna = RASHIS[lagnaRashiIdx] || lagnaData.zodiac_sign || lagnaData.rasi || 'Unknown';
-      result.lagna_degrees = (lagnaData.normDegree || lagnaData.degree || 0).toFixed(2);
+      var lagnaIdx = lagnaData.current_sign !== undefined ? lagnaData.current_sign : Math.floor((lagnaData.normDegree || 0) / 30);
+      result.lagna = RASHIS[lagnaIdx] || lagnaData.zodiac_sign_name || 'Unknown';
+      result.lagna_degrees = (lagnaData.normDegree || 0).toFixed(2);
+      console.log('Lagna:', result.lagna, lagnaIdx, lagnaData.zodiac_sign_name);
     }
 
     result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
