@@ -15,8 +15,8 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 let swisseph = null;
 try {
   swisseph = require('swisseph-v2');
-  swisseph.swe_set_ephe_path(__dirname + '/ephe');
-  console.log('Swiss Ephemeris loaded!');
+  swisseph.swe_set_sid_mode(swisseph.SE_SIDM_LAHIRI, 0, 0);
+  console.log('Swiss Ephemeris loaded! Using Moshier (no ephe files needed)');
 } catch(e) {
   console.log('Swiss Ephemeris not available, using fallback:', e.message);
 }
@@ -213,11 +213,10 @@ function calculateVedicChart(dateStr, timeStr, place) {
     // Julian day
     var julday = swisseph.swe_julday(year, month, day, hourDecimal, swisseph.SE_GREG_CAL);
 
-    // Lahiri Ayanamsa
-    swisseph.swe_set_sid_mode(swisseph.SE_SIDM_LAHIRI, 0, 0);
+    // Lahiri Ayanamsa (already set globally)
     var ayanamsa = swisseph.swe_get_ayanamsa_ut(julday);
 
-    var flag = swisseph.SEFLG_SPEED | swisseph.SEFLG_SIDEREAL;
+    var flag = swisseph.SEFLG_SPEED | swisseph.SEFLG_SIDEREAL | swisseph.SEFLG_MOSEPH;
 
     // Sun position
     var sun = swisseph.swe_calc_ut(julday, swisseph.SE_SUN, flag);
@@ -297,7 +296,7 @@ function hashPassword(password) {
 }
 
 // ===== SYSTEM PROMPT =====
-var BASE_PROMPT = 'You are Jyotish Guru, India\'s most trusted Vedic astrologer with 20+ years expertise. Current year: 2026.\n\nIMPORTANT: When birth chart data is provided to you, USE THOSE EXACT VALUES. Do not recalculate. The calculations have already been done using Swiss Ephemeris (NASA JPL data) with Lahiri Ayanamsa.\n\nProvide detailed Vedic readings including:\n- Personality traits based on Sun, Moon and Lagna\n- Current Dasha period analysis for 2026\n- Predictions for career, love, health, finance\n- Nakshatra characteristics and deity\n- Remedies and upay if needed\n- Lucky colors, numbers, gems based on Lagna\n\nADDITIONAL SERVICES: Numerology, Tarot, Prashna Kundli, Vivah Milan, Muhurta, Ratna Shastra.\n\nSTYLE: Warm, mystical, wise. Use Sanskrit terms with Hindi/English explanation. Reply in user\'s language. Max 3-4 paragraphs. End with: "Note: Jyotish aatmik margdarshan ke liye hai."';
+var BASE_PROMPT = 'You are Jyotish Guru, India\'s most trusted Vedic astrologer with 20+ years expertise. Current year: 2026. Use ONLY Vedic Sidereal system with Lahiri Ayanamsa.\n\nCRITICAL RULE: If BIRTH CHART DATA is given in this prompt, you MUST use those EXACT values for Sun, Moon and Lagna. Do NOT ask user to provide chart data again. Do NOT recalculate. Just use the provided values directly in your reading.\n\nIf no birth chart data is provided but user gives DOB/time/place, tell them the chart is being calculated and give reading based on Sun sign at minimum.\n\nVEDIC SUN SIGN DATES (Sidereal Lahiri):\nMesh(Aries):Apr14-May14, Vrishabh(Taurus):May15-Jun14, Mithun(Gemini):Jun15-Jul14, Kark(Cancer):Jul15-Aug14, Simha(Leo):Aug15-Sep15, Kanya(Virgo):Sep16-Oct15, Tula(Libra):Oct16-Nov14, Vrishchik(Scorpio):Nov15-Dec14, Dhanu(Sagittarius):Dec15-Jan13, Makar(Capricorn):Jan14-Feb11, Kumbh(Aquarius):Feb12-Mar12, Meen(Pisces):Mar13-Apr13\n\nProvide: Personality traits, 2026 Dasha analysis, career/love/health predictions, Nakshatra details, remedies, lucky gems/colors.\n\nADDITIONAL: Numerology, Tarot, Prashna Kundli, Vivah Milan, Muhurta, Ratna Shastra.\n\nSTYLE: Warm, mystical. Sanskrit + Hindi/English. Reply in user\'s language. Max 3-4 paragraphs. End with: "Note: Jyotish aatmik margdarshan ke liye hai."';
 
 // ===== ROUTES =====
 app.get('/', function(req, res) {
@@ -404,7 +403,11 @@ app.post('/chat', async function(req, res) {
     // Calculate chart if birth details provided
     var chartData = null;
     if (dob && birth_time && birth_place) {
+      console.log('Calculating chart for:', dob, birth_time, birth_place);
       chartData = calculateVedicChart(dob, birth_time, birth_place);
+      console.log('Chart result:', JSON.stringify(chartData));
+    } else {
+      console.log('Missing birth details - dob:', dob, 'time:', birth_time, 'place:', birth_place);
     }
 
     // Build system prompt with chart data injected
