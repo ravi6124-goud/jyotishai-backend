@@ -297,28 +297,38 @@ async function calculateChart(dob, birth_time, birth_place) {
     // Build result
     var result = {};
 
-    // API gives current_sign (0-based index) and zodiac_sign_name directly
+    // Use zodiac_sign_name directly from API - it's accurate!
+    // Map English name to Sanskrit/Hindi + English format
+    var SIGN_MAP = {
+      'Aries': 'Mesh (Aries)', 'Taurus': 'Vrishabh (Taurus)',
+      'Gemini': 'Mithun (Gemini)', 'Cancer': 'Kark (Cancer)',
+      'Leo': 'Simha (Leo)', 'Virgo': 'Kanya (Virgo)',
+      'Libra': 'Tula (Libra)', 'Scorpio': 'Vrishchik (Scorpio)',
+      'Sagittarius': 'Dhanu (Sagittarius)', 'Capricorn': 'Makar (Capricorn)',
+      'Aquarius': 'Kumbh (Aquarius)', 'Pisces': 'Meen (Pisces)'
+    };
+
     if (sunData) {
-      var sunIdx = sunData.current_sign !== undefined ? sunData.current_sign : Math.floor((sunData.normDegree || 0) / 30);
-      result.sun_rashi = RASHIS[sunIdx] || sunData.zodiac_sign_name || 'Unknown';
+      var sunSignName = sunData.zodiac_sign_name || '';
+      result.sun_rashi = SIGN_MAP[sunSignName] || sunSignName || 'Unknown';
       result.sun_degrees = (sunData.normDegree || 0).toFixed(2);
-      console.log('Sun:', result.sun_rashi, sunIdx, sunData.zodiac_sign_name);
+      console.log('Sun sign from API:', sunSignName, '->', result.sun_rashi);
     }
 
     if (moonData) {
-      var moonIdx = moonData.current_sign !== undefined ? moonData.current_sign : Math.floor((moonData.normDegree || 0) / 30);
-      result.moon_rashi = RASHIS[moonIdx] || moonData.zodiac_sign_name || 'Unknown';
+      var moonSignName = moonData.zodiac_sign_name || '';
+      result.moon_rashi = SIGN_MAP[moonSignName] || moonSignName || 'Unknown';
       result.moon_degrees = (moonData.normDegree || 0).toFixed(2);
       result.nakshatra = moonData.nakshatra_name || moonData.nakshatraName || moonData.nakshatra || '';
       result.nakshatra_pada = moonData.nakshatra_pada || moonData.pada || '';
-      console.log('Moon:', result.moon_rashi, moonIdx, moonData.zodiac_sign_name);
+      console.log('Moon sign from API:', moonSignName, '->', result.moon_rashi);
     }
 
     if (lagnaData) {
-      var lagnaIdx = lagnaData.current_sign !== undefined ? lagnaData.current_sign : Math.floor((lagnaData.normDegree || 0) / 30);
-      result.lagna = RASHIS[lagnaIdx] || lagnaData.zodiac_sign_name || 'Unknown';
+      var lagnaSignName = lagnaData.zodiac_sign_name || '';
+      result.lagna = SIGN_MAP[lagnaSignName] || lagnaSignName || 'Unknown';
       result.lagna_degrees = (lagnaData.normDegree || 0).toFixed(2);
-      console.log('Lagna:', result.lagna, lagnaIdx, lagnaData.zodiac_sign_name);
+      console.log('Lagna sign from API:', lagnaSignName, '->', result.lagna);
     }
 
     result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
