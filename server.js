@@ -372,6 +372,11 @@ app.get('/ping', function(req, res) {
   res.json({ status: 'alive', time: new Date().toISOString() });
 });
 
+app.get('/config', function(req, res) {
+  var key = process.env.RAZORPAY_KEY_ID || '';
+  res.json({ razorpay_key: key });
+});
+
 app.get('/test-api', async function(req, res) {
   try {
     var r = await fetch('https://api.anthropic.com/v1/messages', {
