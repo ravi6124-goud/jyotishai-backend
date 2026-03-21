@@ -145,9 +145,18 @@ async function calculateChart(dob, birth_time, birth_place) {
       return null;
     }
 
-    var coords = getCityCoords(birth_place);
+    // Clean birth_place - take only first meaningful part
+    var cleanPlace = birth_place;
+    // Remove anything after common stop words
+    cleanPlace = cleanPlace.replace(/,?\s*(need|want|give|tell|what|how|please|pls|bata|mujhe|mera|meri).*/i, '').trim();
+    // Take only city/state part (first 2 parts max)
+    var placeParts = cleanPlace.split(',');
+    cleanPlace = placeParts.slice(0, 2).join(',').trim();
+    console.log('Original place:', birth_place, '-> Cleaned:', cleanPlace);
+
+    var coords = getCityCoords(cleanPlace);
     if (!coords) {
-      console.log('City not found:', birth_place, '- using India center');
+      console.log('City not found:', cleanPlace, '- using India center');
       coords = [20.5937, 78.9629];
     }
 
@@ -187,22 +196,30 @@ async function calculateChart(dob, birth_time, birth_place) {
     console.log('API response received, keys:', Object.keys(data));
 
     // Extract Sun, Moon, Ascendant
-    var planets = data.output || data;
-    var sunData = null, moonData = null, lagnaData = null;
-
-    if (Array.isArray(planets)) {
-      for (var p of planets) {
-        if (p.id === 0 || p.name === 'Sun') sunData = p;
-        if (p.id === 1 || p.name === 'Moon') moonData = p;
-        if (p.id === 100 || p.name === 'Ascendant' || p.name === 'Lagna') lagnaData = p;
-      }
+    // API returns {statusCode, output} where output is array
+    var planets = [];
+    if (data.output && Array.isArray(data.output)) {
+      planets = data.output;
+    } else if (Array.isArray(data)) {
+      planets = data;
     } else if (data.planets) {
-      for (var p of data.planets) {
-        if (p.id === 0 || p.name === 'Sun') sunData = p;
-        if (p.id === 1 || p.name === 'Moon') moonData = p;
-        if (p.id === 100 || p.name === 'Ascendant') lagnaData = p;
-      }
+      planets = data.planets;
     }
+
+    console.log('Total planets found:', planets.length);
+    if (planets.length > 0) console.log('First planet sample:', JSON.stringify(planets[0]));
+
+    var sunData = null, moonData = null, lagnaData = null;
+    for (var p of planets) {
+      var name = (p.name || '').toLowerCase();
+      var id = p.id;
+      if (id === 0 || name === 'sun' || name === 'surya') sunData = p;
+      else if (id === 1 || name === 'moon' || name === 'chandra') moonData = p;
+      else if (id === 100 || name === 'ascendant' || name === 'lagna' || name === 'asc') lagnaData = p;
+    }
+    console.log('Sun found:', sunData ? sunData.name : 'NO');
+    console.log('Moon found:', moonData ? moonData.name : 'NO');
+    console.log('Lagna found:', lagnaData ? lagnaData.name : 'NO');
 
     // Build result
     var result = {};
@@ -233,7 +250,7 @@ async function calculateChart(dob, birth_time, birth_place) {
       result.lagna_degrees = (lagnaData.normDegree || lagnaData.degree || 0).toFixed(2);
     }
 
-    result.location = birth_place + ' (' + coords[0] + 'N, ' + coords[1] + 'E)';
+    result.location = cleanPlace + ' (' + coords[0] + 'N, ' + coords[1] + 'E)';
     result.source = 'FreeAstrologyAPI - Lahiri Ayanamsa';
 
     console.log('Chart result:', JSON.stringify(result));
