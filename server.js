@@ -73,19 +73,95 @@ const CITIES = {
   'bhubaneswar': [20.2961, 85.8245], 'cuttack': [20.4625, 85.8830],
   'guwahati': [26.1445, 91.7362],
   'jammu': [32.7266, 74.8570], 'srinagar': [34.0837, 74.7973],
-  'panaji': [15.4909, 73.8278], 'goa': [15.2993, 74.1240]
+  'panaji': [15.4909, 73.8278], 'goa': [15.2993, 74.1240],
+  // More Rajasthan
+  'sujangarh': [27.8067, 74.5881], 'churu': [28.3023, 74.9686],
+  'sikar': [27.6094, 75.1399], 'jhunjhunu': [28.1289, 75.3982],
+  'barmer': [25.7521, 71.3967], 'jaisalmer': [26.9157, 70.9083],
+  'pali': [25.7711, 73.3234], 'sirohi': [24.8867, 72.8604],
+  'tonk': [26.1664, 75.7885], 'sawai madhopur': [26.0028, 76.3527],
+  'bharatpur': [27.2152, 77.4941], 'dholpur': [26.7024, 77.8936],
+  'bundi': [25.4385, 75.6389], 'chittorgarh': [24.8887, 74.6269],
+  'bhilwara': [25.3407, 74.6313], 'rajsamand': [25.0667, 73.8833],
+  'dungarpur': [23.8424, 73.7148], 'banswara': [23.5467, 74.4367],
+  'pratapgarh': [24.0333, 74.7833], 'jalor': [25.3478, 72.6178],
+  'sanchore': [24.7554, 71.7856], 'hanumangarh': [29.5833, 74.3333],
+  'ganganagar': [29.9038, 73.8772], 'sri ganganagar': [29.9038, 73.8772],
+  'nohar': [29.1833, 74.7667], 'bhadra': [29.1000, 75.1667],
+  // More UP
+  'jhansi': [25.4484, 78.5685], 'ghazipur': [25.5756, 83.5773],
+  'azamgarh': [26.0689, 83.1847], 'sultanpur': [26.2648, 82.0727],
+  'faizabad': [26.7922, 82.1998], 'bahraich': [27.5743, 81.5958],
+  'sitapur': [27.5631, 80.6817], 'hardoi': [27.3956, 80.1264],
+  'unnao': [26.5479, 80.4896], 'rae bareli': [26.2309, 81.2329],
+  // More MP  
+  'chhindwara': [22.0574, 78.9382], 'balaghat': [21.8124, 80.1853],
+  'seoni': [22.0850, 79.5381], 'mandla': [22.5982, 80.3749],
+  'hoshangabad': [22.7547, 77.7270], 'betul': [21.9001, 77.9010],
+  'vidisha': [23.5243, 77.8144], 'raisen': [23.3314, 77.7882],
+  // More Maharashtra
+  'akola': [20.7000, 77.0167], 'yavatmal': [20.3888, 78.1204],
+  'buldhana': [20.5292, 76.1842], 'washim': [20.1117, 77.1336],
+  'chandrapur': [19.9615, 79.2961], 'gadchiroli': [20.1808, 80.0084],
+  'gondia': [21.4628, 80.1952], 'bhandara': [21.1663, 79.6506],
+  // More Gujarat
+  'anand': [22.5645, 72.9289], 'kheda': [22.7520, 72.6846],
+  'mehsana': [23.5879, 72.3693], 'patan': [23.8493, 72.1266],
+  'banaskantha': [24.1742, 72.4328], 'sabarkantha': [23.3667, 73.0167],
+  'gandhinagar': [23.2156, 72.6369], 'dahod': [22.8357, 74.2569],
+  // More Bihar
+  'bhagalpur': [25.2444, 86.9722], 'munger': [25.3728, 86.4742],
+  'begusarai': [25.4182, 86.1272], 'samastipur': [25.8620, 85.7813],
+  'darbhanga': [26.1542, 85.8918], 'sitamarhi': [26.5911, 85.4861],
+  'madhubani': [26.3533, 86.0722], 'supaul': [26.1228, 86.6050],
+  'araria': [26.1473, 87.4711], 'kishanganj': [26.0968, 87.9406],
+  'purnia': [25.7771, 87.4753], 'katihar': [25.5377, 87.5785],
+  'nawada': [24.8838, 85.5417], 'sheikhpura': [25.1403, 85.8439],
+  'jamui': [24.9262, 86.2241], 'banka': [24.8858, 86.9200]
 };
 
 function getCityCoords(place) {
   if (!place) return null;
   var lower = place.toLowerCase().trim();
+  // Direct match
   if (CITIES[lower]) return CITIES[lower];
-  for (var city in CITIES) {
-    if (lower.includes(city) || city.includes(lower.split(',')[0].trim())) {
-      return CITIES[city];
+  // Partial match - check each word
+  var words = lower.split(/[,\s]+/).filter(function(w) { return w.length > 2; });
+  for (var word of words) {
+    if (CITIES[word]) return CITIES[word];
+    for (var city in CITIES) {
+      if (city.includes(word) || word.includes(city)) return CITIES[city];
     }
   }
   return null;
+}
+
+async function getCityCoordsAsync(place) {
+  // First try local DB
+  var local = getCityCoords(place);
+  if (local) return local;
+
+  // Fallback: OpenStreetMap Nominatim (free, no API key, covers all cities!)
+  try {
+    var query = encodeURIComponent(place + ', India');
+    var url = 'https://nominatim.openstreetmap.org/search?q=' + query + '&format=json&limit=1&countrycodes=in';
+    var res = await fetch(url, {
+      headers: { 'User-Agent': 'JyotishAI/1.0 (jyotishai@gmail.com)' }
+    });
+    var data = await res.json();
+    if (data && data.length > 0) {
+      var lat = parseFloat(data[0].lat);
+      var lon = parseFloat(data[0].lon);
+      console.log('Geocoded', place, '->', lat, lon, '(' + data[0].display_name + ')');
+      return [lat, lon];
+    }
+  } catch(e) {
+    console.log('Geocoding failed:', e.message);
+  }
+
+  // Final fallback: India center
+  console.log('Using India center for:', place);
+  return [20.5937, 78.9629];
 }
 
 // ===== PARSE DATE =====
@@ -147,18 +223,12 @@ async function calculateChart(dob, birth_time, birth_place) {
 
     // Clean birth_place - take only first meaningful part
     var cleanPlace = birth_place;
-    // Remove anything after common stop words
     cleanPlace = cleanPlace.replace(/,?\s*(need|want|give|tell|what|how|please|pls|bata|mujhe|mera|meri).*/i, '').trim();
-    // Take only city/state part (first 2 parts max)
     var placeParts = cleanPlace.split(',');
     cleanPlace = placeParts.slice(0, 2).join(',').trim();
     console.log('Original place:', birth_place, '-> Cleaned:', cleanPlace);
 
-    var coords = getCityCoords(cleanPlace);
-    if (!coords) {
-      console.log('City not found:', cleanPlace, '- using India center');
-      coords = [20.5937, 78.9629];
-    }
+    var coords = await getCityCoordsAsync(cleanPlace);
 
     console.log('Calling FreeAstrologyAPI for:', date, time, birth_place, coords);
 
@@ -194,6 +264,10 @@ async function calculateChart(dob, birth_time, birth_place) {
 
     var data = await response.json();
     console.log('API response received, keys:', Object.keys(data));
+    console.log('Status code:', data.statusCode);
+    if (data.output) console.log('Output type:', typeof data.output, 'isArray:', Array.isArray(data.output), 'length:', Array.isArray(data.output) ? data.output.length : 'N/A');
+    if (data.output && !Array.isArray(data.output)) console.log('Output sample:', JSON.stringify(data.output).substring(0, 300));
+    if (Array.isArray(data.output) && data.output.length > 0) console.log('First item:', JSON.stringify(data.output[0]).substring(0, 300));
 
     // Extract Sun, Moon, Ascendant
     // API returns {statusCode, output} where output is array
@@ -250,7 +324,7 @@ async function calculateChart(dob, birth_time, birth_place) {
       result.lagna_degrees = (lagnaData.normDegree || lagnaData.degree || 0).toFixed(2);
     }
 
-    result.location = cleanPlace + ' (' + coords[0] + 'N, ' + coords[1] + 'E)';
+    result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
     result.source = 'FreeAstrologyAPI - Lahiri Ayanamsa';
 
     console.log('Chart result:', JSON.stringify(result));
