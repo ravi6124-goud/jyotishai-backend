@@ -459,13 +459,14 @@ app.post('/chat', async function(req, res) {
     // Build system prompt
     var systemPrompt = BASE_PROMPT;
     if (chartData) {
-      systemPrompt += '\n\n====== BIRTH CHART (FreeAstrologyAPI - Lahiri Ayanamsa - 100% ACCURATE) ======\n';
-      if (chartData.sun_rashi) systemPrompt += 'SUN SIGN: ' + chartData.sun_rashi + ' (' + chartData.sun_degrees + ' deg)\n';
-      if (chartData.moon_rashi) systemPrompt += 'MOON SIGN (RASHI): ' + chartData.moon_rashi + ' (' + chartData.moon_degrees + ' deg)\n';
-      if (chartData.lagna) systemPrompt += 'ASCENDANT (LAGNA): ' + chartData.lagna + ' (' + chartData.lagna_degrees + ' deg)\n';
-      if (chartData.nakshatra) systemPrompt += 'NAKSHATRA: ' + chartData.nakshatra + (chartData.nakshatra_pada ? ' Pada ' + chartData.nakshatra_pada : '') + '\n';
-      systemPrompt += 'LOCATION: ' + chartData.location + '\n';
-      systemPrompt += '====== USE THESE EXACT VALUES. START READING NOW. ======';
+      systemPrompt += '\n\nBIRTH CHART CALCULATED BY FREEASTROLOGYAPI (NASA JPL DATA + LAHIRI AYANAMSA):';
+      systemPrompt += '\nTHESE ARE 100% CORRECT. DO NOT CHANGE THEM. DO NOT RECALCULATE.';
+      if (chartData.sun_rashi) systemPrompt += '\nSUN SIGN = ' + chartData.sun_rashi + ' (EXACT: ' + chartData.sun_degrees + ' degrees)';
+      if (chartData.moon_rashi) systemPrompt += '\nMOON SIGN = ' + chartData.moon_rashi + ' (EXACT: ' + chartData.moon_degrees + ' degrees)';
+      if (chartData.lagna) systemPrompt += '\nASCENDANT/LAGNA = ' + chartData.lagna + ' (EXACT: ' + chartData.lagna_degrees + ' degrees)';
+      if (chartData.nakshatra) systemPrompt += '\nNAKSHATRA = ' + chartData.nakshatra + (chartData.nakshatra_pada ? ' Pada ' + chartData.nakshatra_pada : '');
+      systemPrompt += '\nLOCATION USED = ' + chartData.location;
+      systemPrompt += '\nWARNING: If you give different values than above, you are WRONG. These are calculated by astronomy software. Use them exactly as given.';
     }
 
     var response = await fetch('https://api.anthropic.com/v1/messages', {
