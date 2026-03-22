@@ -2,6 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 
+// Swiss Ephemeris fallback
+let swisseph = null;
+try {
+  swisseph = require('swisseph-v2');
+  swisseph.swe_set_sid_mode(swisseph.SE_SIDM_LAHIRI, 0, 0);
+  console.log('Swiss Ephemeris loaded as fallback!');
+} catch(e) {
+  console.log('Swiss Ephemeris not available:', e.message);
+}
+
 const app = express();
 app.use(cors({ origin: '*', methods: ['GET', 'POST', 'PATCH', 'OPTIONS'], allowedHeaders: ['Content-Type', 'Authorization'] }));
 app.options('*', cors());
@@ -11,6 +21,103 @@ const SUPABASE_URL = 'https://mqbpmjnufegoyrizarsf.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const ASTRO_KEY = process.env.ASTRO_API_KEY;
+
+// ===== SWISS EPHEMERIS FALLBACK CALCULATION =====
+function calculateWithSwisseph(date, time, place) {
+  try {
+    if (!swisseph) return null;
+    var coords = getCityCoords(place) || [20.5937, 78.9629];
+    var lat = coords[0], lng = coords[1];
+
+    // Convert IST to UTC
+    var totalMinutes = time.hours * 60 + time.minutes - 330;
+    if (totalMinutes < 0) { totalMinutes += 1440; date.day -= 1; }
+    var utcHour = Math.floor(totalMinutes / 60) + (totalMinutes % 60) / 60.0;
+
+    var julday = swisseph.swe_julday(date.year, date.month, date.day, utcHour, swisseph.SE_GREG_CAL);
+    var flag = swisseph.SEFLG_SPEED | swisseph.SEFLG_SIDEREAL | swisseph.SEFLG_MOSEPH;
+
+    var RASHIS = ['Mesh (Aries)','Vrishabh (Taurus)','Mithun (Gemini)','Kark (Cancer)',
+      'Simha (Leo)','Kanya (Virgo)','Tula (Libra)','Vrishchik (Scorpio)',
+      'Dhanu (Sagittarius)','Makar (Capricorn)','Kumbh (Aquarius)','Meen (Pisces)'];
+
+    var NAKSHATRAS = ['Ashwini','Bharani','Krittika','Rohini','Mrigashira','Ardra',
+      'Punarvasu','Pushya','Ashlesha','Magha','Purva Phalguni','Uttara Phalguni',
+      'Hasta','Chitra','Swati','Vishakha','Anuradha','Jyeshtha',
+      'Mula','Purva Ashadha','Uttara Ashadha','Shravana','Dhanishtha','Shatabhisha',
+      'Purva Bhadrapada','Uttara Bhadrapada','Revati'];
+
+    // Planet IDs in Swiss Ephemeris
+    var PLANETS = [
+      {id: swisseph.SE_SUN, key: 'sun'},
+      {id: swisseph.SE_MOON, key: 'moon'},
+      {id: swisseph.SE_MARS, key: 'mars'},
+      {id: swisseph.SE_MERCURY, key: 'mercury'},
+      {id: swisseph.SE_JUPITER, key: 'jupiter'},
+      {id: swisseph.SE_VENUS, key: 'venus'},
+      {id: swisseph.SE_SATURN, key: 'saturn'},
+      {id: swisseph.SE_MEAN_NODE, key: 'rahu'}
+    ];
+
+    var result = {};
+
+    for (var i = 0; i < PLANETS.length; i++) {
+      var p = PLANETS[i];
+      var calc = swisseph.swe_calc_ut(julday, p.id, flag);
+      if (calc && calc.longitude !== undefined) {
+        var deg = ((calc.longitude % 360) + 360) % 360;
+        var rashiIdx = Math.floor(deg / 30);
+        var normDeg = deg % 30;
+        result[p.key + '_rashi'] = RASHIS[rashiIdx];
+        result[p.key + '_degrees'] = normDeg.toFixed(2);
+        if (p.key === 'rahu') {
+          // Ketu is opposite Rahu
+          var ketuDeg = (deg + 180) % 360;
+          result.ketu_rashi = RASHIS[Math.floor(ketuDeg / 30)];
+          result.ketu_degrees = (ketuDeg % 30).toFixed(2);
+        }
+        if (p.key === 'moon') {
+          var nakIdx = Math.floor(deg / (360/27));
+          result.nakshatra = NAKSHATRAS[nakIdx];
+          result.nakshatra_pada = Math.floor((deg % (360/27)) / (360/108)) + 1;
+          result.moon_abs_deg = deg; // Save for Dasha calculation
+        }
+      }
+    }
+
+    // Lagna calculation
+    var houses = swisseph.swe_houses(julday, lat, lng, 'W');
+    if (houses && houses.ascendant !== undefined) {
+      var ascDeg = ((houses.ascendant % 360) + 360) % 360;
+      result.lagna = RASHIS[Math.floor(ascDeg / 30)];
+      result.lagna_degrees = (ascDeg % 30).toFixed(2);
+    }
+
+    // Map to standard format
+    var mapped = {
+      sun_rashi: result.sun_rashi, sun_degrees: result.sun_degrees,
+      moon_rashi: result.moon_rashi, moon_degrees: result.moon_degrees,
+      lagna: result.lagna, lagna_degrees: result.lagna_degrees,
+      nakshatra: result.nakshatra, nakshatra_pada: result.nakshatra_pada,
+      mars: result.mars_rashi, mars_deg: result.mars_degrees,
+      mercury: result.mercury_rashi, mercury_deg: result.mercury_degrees,
+      jupiter: result.jupiter_rashi, jupiter_deg: result.jupiter_degrees,
+      venus: result.venus_rashi, venus_deg: result.venus_degrees,
+      saturn: result.saturn_rashi, saturn_deg: result.saturn_degrees,
+      rahu: result.rahu_rashi, rahu_deg: result.rahu_degrees,
+      ketu: result.ketu_rashi, ketu_deg: result.ketu_degrees,
+      moon_abs_deg: result.moon_abs_deg,
+      location: place + ' (' + lat + 'N, ' + lng + 'E)',
+      source: 'Swiss Ephemeris (Moshier) - Lahiri Ayanamsa'
+    };
+
+    console.log('Swiss Ephemeris calculated:', mapped.sun_rashi, mapped.moon_rashi, mapped.lagna);
+    return mapped;
+  } catch(e) {
+    console.error('Swiss Ephemeris error:', e.message);
+    return null;
+  }
+}
 
 // ===== CITY DATABASE =====
 const CITIES = {
@@ -392,7 +499,18 @@ async function calculateChart(dob, birth_time, birth_place) {
     });
 
     if (!response.ok) {
-      console.log('API error:', response.status);
+      console.log('API error:', response.status, '- trying Swiss Ephemeris fallback');
+      // Fallback to Swiss Ephemeris
+      var swissResult = calculateWithSwisseph(date, time, cleanPlace);
+      if (swissResult) {
+        // Calculate Dasha with swisseph result
+        if (swissResult.moon_abs_deg !== undefined) {
+          var dashaList = calculateDashaLocal(swissResult.moon_abs_deg, date.year + '-' + date.month + '-' + date.day);
+          var dashaFormatted = formatDashaLocal(dashaList);
+          if (dashaFormatted) swissResult.dasha = dashaFormatted;
+        }
+        return swissResult;
+      }
       return null;
     }
 
