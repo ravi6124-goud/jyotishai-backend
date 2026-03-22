@@ -279,6 +279,13 @@ async function calculateChart(dob, birth_time, birth_place) {
     var sunData = output.Sun || output.sun || null;
     var moonData = output.Moon || output.moon || null;
     var lagnaData = output.Ascendant || output.ascendant || output.Lagna || null;
+    var marsData = output.Mars || output.mars || null;
+    var mercuryData = output.Mercury || output.mercury || null;
+    var jupiterData = output.Jupiter || output.jupiter || null;
+    var venusData = output.Venus || output.venus || null;
+    var saturnData = output.Saturn || output.saturn || null;
+    var rahuData = output['Rahu (North node)'] || output.Rahu || output.rahu || null;
+    var ketuData = output['Ketu (South node)'] || output.Ketu || output.ketu || null;
 
     // Fallback: array format
     if (!sunData && Array.isArray(output)) {
@@ -287,8 +294,19 @@ async function calculateChart(dob, birth_time, birth_place) {
         if (name === 'sun' || p.id === 0) sunData = p;
         else if (name === 'moon' || p.id === 1) moonData = p;
         else if (name === 'ascendant' || name === 'lagna' || p.id === 100) lagnaData = p;
+        else if (name === 'mars' || p.id === 4) marsData = p;
+        else if (name === 'mercury' || p.id === 2) mercuryData = p;
+        else if (name === 'jupiter' || p.id === 5) jupiterData = p;
+        else if (name === 'venus' || p.id === 3) venusData = p;
+        else if (name === 'saturn' || p.id === 6) saturnData = p;
+        else if (name.includes('rahu') || p.id === 101) rahuData = p;
+        else if (name.includes('ketu') || p.id === 102) ketuData = p;
       }
     }
+    console.log('All planets - Mars:', marsData ? marsData.zodiac_sign_name : 'NO',
+      'Venus:', venusData ? venusData.zodiac_sign_name : 'NO',
+      'Saturn:', saturnData ? saturnData.zodiac_sign_name : 'NO',
+      'Rahu:', rahuData ? rahuData.zodiac_sign_name : 'NO');
 
     console.log('Sun found:', sunData ? 'YES' : 'NO');
     console.log('Moon found:', moonData ? 'YES' : 'NO');
@@ -312,24 +330,28 @@ async function calculateChart(dob, birth_time, birth_place) {
       var sunSignName = sunData.zodiac_sign_name || '';
       result.sun_rashi = SIGN_MAP[sunSignName] || sunSignName || 'Unknown';
       result.sun_degrees = (sunData.normDegree || 0).toFixed(2);
-      console.log('Sun sign from API:', sunSignName, '->', result.sun_rashi);
     }
-
     if (moonData) {
       var moonSignName = moonData.zodiac_sign_name || '';
       result.moon_rashi = SIGN_MAP[moonSignName] || moonSignName || 'Unknown';
       result.moon_degrees = (moonData.normDegree || 0).toFixed(2);
       result.nakshatra = moonData.nakshatra_name || moonData.nakshatraName || moonData.nakshatra || '';
       result.nakshatra_pada = moonData.nakshatra_pada || moonData.pada || '';
-      console.log('Moon sign from API:', moonSignName, '->', result.moon_rashi);
     }
-
     if (lagnaData) {
       var lagnaSignName = lagnaData.zodiac_sign_name || '';
       result.lagna = SIGN_MAP[lagnaSignName] || lagnaSignName || 'Unknown';
       result.lagna_degrees = (lagnaData.normDegree || 0).toFixed(2);
-      console.log('Lagna sign from API:', lagnaSignName, '->', result.lagna);
     }
+    // All 9 planets
+    if (marsData) { result.mars = SIGN_MAP[marsData.zodiac_sign_name] || marsData.zodiac_sign_name || ''; result.mars_deg = (marsData.normDegree||0).toFixed(1); }
+    if (mercuryData) { result.mercury = SIGN_MAP[mercuryData.zodiac_sign_name] || mercuryData.zodiac_sign_name || ''; result.mercury_deg = (mercuryData.normDegree||0).toFixed(1); }
+    if (jupiterData) { result.jupiter = SIGN_MAP[jupiterData.zodiac_sign_name] || jupiterData.zodiac_sign_name || ''; result.jupiter_deg = (jupiterData.normDegree||0).toFixed(1); }
+    if (venusData) { result.venus = SIGN_MAP[venusData.zodiac_sign_name] || venusData.zodiac_sign_name || ''; result.venus_deg = (venusData.normDegree||0).toFixed(1); }
+    if (saturnData) { result.saturn = SIGN_MAP[saturnData.zodiac_sign_name] || saturnData.zodiac_sign_name || ''; result.saturn_deg = (saturnData.normDegree||0).toFixed(1); }
+    if (rahuData) { result.rahu = SIGN_MAP[rahuData.zodiac_sign_name] || rahuData.zodiac_sign_name || ''; result.rahu_deg = (rahuData.normDegree||0).toFixed(1); }
+    if (ketuData) { result.ketu = SIGN_MAP[ketuData.zodiac_sign_name] || ketuData.zodiac_sign_name || ''; result.ketu_deg = (ketuData.normDegree||0).toFixed(1); }
+    console.log('Chart complete:', JSON.stringify(result));
 
     result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
     result.source = 'FreeAstrologyAPI - Lahiri Ayanamsa';
@@ -467,7 +489,14 @@ app.post('/chat', async function(req, res) {
       if (chartData.lagna) systemPrompt += '\nASCENDANT/LAGNA = ' + chartData.lagna + ' (EXACT: ' + chartData.lagna_degrees + ' degrees)';
       if (chartData.nakshatra) systemPrompt += '\nNAKSHATRA = ' + chartData.nakshatra + (chartData.nakshatra_pada ? ' Pada ' + chartData.nakshatra_pada : '');
       systemPrompt += '\nLOCATION USED = ' + chartData.location;
-      systemPrompt += '\nWARNING: If you give different values than above, you are WRONG. These are calculated by astronomy software. Use them exactly as given.';
+      if (chartData.mars) systemPrompt += '\nMARS = ' + chartData.mars + ' (' + chartData.mars_deg + ' deg)';
+      if (chartData.mercury) systemPrompt += '\nMERCURY = ' + chartData.mercury + ' (' + chartData.mercury_deg + ' deg)';
+      if (chartData.jupiter) systemPrompt += '\nJUPITER = ' + chartData.jupiter + ' (' + chartData.jupiter_deg + ' deg)';
+      if (chartData.venus) systemPrompt += '\nVENUS = ' + chartData.venus + ' (' + chartData.venus_deg + ' deg)';
+      if (chartData.saturn) systemPrompt += '\nSATURN = ' + chartData.saturn + ' (' + chartData.saturn_deg + ' deg)';
+      if (chartData.rahu) systemPrompt += '\nRAHU = ' + chartData.rahu + ' (' + chartData.rahu_deg + ' deg)';
+      if (chartData.ketu) systemPrompt += '\nKETU = ' + chartData.ketu + ' (' + chartData.ketu_deg + ' deg)';
+      systemPrompt += '\nWARNING: If you give different values than above, you are WRONG. Use ONLY these exact planetary positions.';
     }
 
     var response = await fetch('https://api.anthropic.com/v1/messages', {
