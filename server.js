@@ -212,6 +212,64 @@ var RASHIS = [
 // planet id 0=sun,1=moon,2=mars,3=mercury,4=jupiter,5=venus,6=saturn
 // lagna = id 100 or ascendant
 
+async function calculateDasha(payload) {
+  try {
+    var response = await fetch('https://json.freeastrologyapi.com/vimsottari/maha-dasas-and-antar-dasas', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': ASTRO_KEY },
+      body: JSON.stringify(payload)
+    });
+    if (!response.ok) { console.log('Dasha API status:', response.status); return null; }
+    var data = await response.json();
+    console.log('Dasha API received, keys:', Object.keys(data));
+    return data;
+  } catch(e) { console.error('Dasha error:', e.message); return null; }
+}
+
+function formatDashaData(dashaData) {
+  if (!dashaData || !dashaData.output) return null;
+  try {
+    var output = dashaData.output;
+    var result = '';
+    var now = new Date();
+    var cutoff = now.getFullYear() + 40;
+    if (Array.isArray(output)) {
+      for (var i = 0; i < output.length; i++) {
+        var maha = output[i];
+        var mStart = new Date(maha.start_date || maha.startDate || '');
+        var mEnd = new Date(maha.end_date || maha.endDate || '');
+        var mName = maha.planet || maha.name || maha.dasa_planet || '';
+        if (now >= mStart && now <= mEnd) {
+          result += 'CURRENT MAHADASHA: ' + mName + ' Mahadasha (until ' + mEnd.getFullYear() + ')\n';
+          var antarList = maha.antardasa || maha.antar_dasa || maha.sub_periods || [];
+          if (Array.isArray(antarList)) {
+            for (var j = 0; j < antarList.length; j++) {
+              var antar = antarList[j];
+              var aStart = new Date(antar.start_date || antar.startDate || '');
+              var aEnd = new Date(antar.end_date || antar.endDate || '');
+              var aName = antar.planet || antar.name || antar.dasa_planet || '';
+              if (now >= aStart && now <= aEnd) {
+                result += 'CURRENT ANTARDASHA: ' + aName + ' Antardasha (until ' + aEnd.toLocaleDateString('en-IN', {month:'short',year:'numeric'}) + ')\n';
+              }
+            }
+          }
+        }
+      }
+      result += 'FULL DASHA TIMELINE (40 years):\n';
+      for (var k = 0; k < output.length; k++) {
+        var d = output[k];
+        var dEnd = new Date(d.end_date || d.endDate || '');
+        var dStart = new Date(d.start_date || d.startDate || '');
+        var dName = d.planet || d.name || d.dasa_planet || '';
+        if (dEnd.getFullYear() >= now.getFullYear() && dStart.getFullYear() <= cutoff) {
+          result += dName + ' Mahadasha: ' + dStart.getFullYear() + ' - ' + dEnd.getFullYear() + '\n';
+        }
+      }
+    }
+    return result || null;
+  } catch(e) { console.error('Dasha format error:', e.message); return null; }
+}
+
 async function calculateChart(dob, birth_time, birth_place) {
   try {
     var date = parseDate(dob);
@@ -356,6 +414,14 @@ async function calculateChart(dob, birth_time, birth_place) {
     result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
     result.source = 'FreeAstrologyAPI - Lahiri Ayanamsa';
 
+    // Fetch Dasha data
+    var dashaRaw = await calculateDasha(payload);
+    if (dashaRaw) {
+      var dashaFormatted = formatDashaData(dashaRaw);
+      if (dashaFormatted) result.dasha = dashaFormatted;
+      console.log('Dasha data:', dashaFormatted ? 'fetched!' : 'not available');
+    }
+
     console.log('Chart result:', JSON.stringify(result));
     return result;
 
@@ -495,6 +561,10 @@ app.post('/chat', async function(req, res) {
       if (chartData.saturn) systemPrompt += '\nSATURN = ' + chartData.saturn + ' (' + chartData.saturn_deg + ' deg)';
       if (chartData.rahu) systemPrompt += '\nRAHU = ' + chartData.rahu + ' (' + chartData.rahu_deg + ' deg)';
       if (chartData.ketu) systemPrompt += '\nKETU = ' + chartData.ketu + ' (' + chartData.ketu_deg + ' deg)';
+      if (chartData.dasha) {
+        systemPrompt += '\n\nVIMSHOTTARI DASHA (EXACT FROM CALCULATION - USE THESE VALUES ONLY):\n' + chartData.dasha;
+        systemPrompt += '\nWARNING: Use ONLY the dasha periods listed above. Do NOT calculate or guess dasha periods.';
+      }
       systemPrompt += '\nWARNING: If you give different values than above, you are WRONG. Use ONLY these exact planetary positions.';
     }
 
