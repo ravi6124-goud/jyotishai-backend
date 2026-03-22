@@ -212,18 +212,94 @@ var RASHIS = [
 // planet id 0=sun,1=moon,2=mars,3=mercury,4=jupiter,5=venus,6=saturn
 // lagna = id 100 or ascendant
 
-async function calculateDasha(payload) {
-  try {
-    var response = await fetch('https://json.freeastrologyapi.com/vimsottari/maha-dasas-and-antar-dasas', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': ASTRO_KEY },
-      body: JSON.stringify(payload)
-    });
-    if (!response.ok) { console.log('Dasha API status:', response.status); return null; }
-    var data = await response.json();
-    console.log('Dasha API received, keys:', Object.keys(data));
-    return data;
-  } catch(e) { console.error('Dasha error:', e.message); return null; }
+function calculateDashaLocal(moonDegree, birthDate) {
+  // Vimshottari Dasha calculation using Moon's Nakshatra
+  // 27 Nakshatras, each 13.333 degrees
+  var DASHA_LORDS = ['Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'];
+  var DASHA_YEARS = [7, 20, 6, 10, 7, 18, 16, 19, 17]; // Total 120 years
+  var NAK_LORDS = [
+    'Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury', // 1-9
+    'Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury', // 10-18
+    'Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'  // 19-27
+  ];
+
+  // Moon nakshatra (0-26)
+  var nakIdx = Math.floor(moonDegree / (360/27));
+  if (nakIdx >= 27) nakIdx = 26;
+  var nakLord = NAK_LORDS[nakIdx];
+
+  // Position within nakshatra
+  var nakDegree = moonDegree % (360/27);
+  var nakSpan = 360/27; // 13.333 degrees per nakshatra
+  var fractionElapsed = nakDegree / nakSpan;
+
+  // Find dasha lord index
+  var lordIdx = DASHA_LORDS.indexOf(nakLord);
+
+  // Years elapsed in current dasha at birth
+  var currentDashaYears = DASHA_YEARS[lordIdx];
+  var yearsElapsed = fractionElapsed * currentDashaYears;
+
+  // Birth date
+  var birth = new Date(birthDate);
+  var birthMs = birth.getTime();
+
+  // Build dasha timeline from birth
+  var dashas = [];
+  var cursor = new Date(birth);
+  // Go back to start of current dasha
+  cursor.setFullYear(cursor.getFullYear() - yearsElapsed);
+  var startLordIdx = lordIdx;
+
+  for (var i = 0; i < 9; i++) {
+    var idx = (startLordIdx + i) % 9;
+    var years = DASHA_YEARS[idx];
+    var dashaStart = new Date(cursor);
+    cursor.setFullYear(cursor.getFullYear() + years);
+    var dashaEnd = new Date(cursor);
+    dashas.push({ planet: DASHA_LORDS[idx], start: dashaStart, end: dashaEnd, years: years });
+  }
+
+  return dashas;
+}
+
+function formatDashaLocal(dashas) {
+  if (!dashas || !dashas.length) return null;
+  var now = new Date();
+  var result = '';
+  var cutoff = now.getFullYear() + 40;
+
+  for (var i = 0; i < dashas.length; i++) {
+    var d = dashas[i];
+    if (now >= d.start && now <= d.end) {
+      result += 'CURRENT MAHADASHA: ' + d.planet + ' Mahadasha (until ' + d.end.getFullYear() + ')\n';
+      // Calculate antardashas within current mahadasha
+      var DASHA_LORDS = ['Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'];
+      var DASHA_YEARS = [7, 20, 6, 10, 7, 18, 16, 19, 17];
+      var mIdx = DASHA_LORDS.indexOf(d.planet);
+      var antarCursor = new Date(d.start);
+      for (var j = 0; j < 9; j++) {
+        var aIdx = (mIdx + j) % 9;
+        var aFrac = DASHA_YEARS[aIdx] / 120;
+        var aDays = d.years * 365.25 * aFrac;
+        var aStart = new Date(antarCursor);
+        antarCursor.setTime(antarCursor.getTime() + aDays * 86400000);
+        var aEnd = new Date(antarCursor);
+        if (now >= aStart && now <= aEnd) {
+          result += 'CURRENT ANTARDASHA: ' + DASHA_LORDS[aIdx] + ' Antardasha (until ' + aEnd.toLocaleDateString('en-IN', {month:'short',year:'numeric'}) + ')\n';
+        }
+      }
+    }
+  }
+
+  result += 'FULL DASHA TIMELINE:\n';
+  for (var k = 0; k < dashas.length; k++) {
+    var da = dashas[k];
+    if (da.end.getFullYear() >= now.getFullYear() && da.start.getFullYear() <= cutoff) {
+      result += da.planet + ' Mahadasha: ' + da.start.getFullYear() + ' - ' + da.end.getFullYear() + '\n';
+    }
+  }
+  return result || null;
 }
 
 function formatDashaData(dashaData) {
@@ -414,12 +490,23 @@ async function calculateChart(dob, birth_time, birth_place) {
     result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
     result.source = 'FreeAstrologyAPI - Lahiri Ayanamsa';
 
-    // Fetch Dasha data
-    var dashaRaw = await calculateDasha(payload);
-    if (dashaRaw) {
-      var dashaFormatted = formatDashaData(dashaRaw);
-      if (dashaFormatted) result.dasha = dashaFormatted;
-      console.log('Dasha data:', dashaFormatted ? 'fetched!' : 'not available');
+    // Calculate Dasha locally using Swiss Ephemeris Moon position
+    if (result.moon_degrees) {
+      var moonDeg = parseFloat(result.moon_degrees);
+      // Convert moon degrees to absolute (0-360)
+      var moonSignIdx = Object.values(SIGN_MAP).indexOf(result.moon_rashi);
+      // Get absolute moon degree from normDegree + sign offset
+      var moonAbs = moonDeg;
+      if (moonData) {
+        var fullDeg = moonData.fullDegree || moonData.normDegree || moonDeg;
+        moonAbs = ((parseFloat(fullDeg) % 360) + 360) % 360;
+      }
+      var dashaList = calculateDashaLocal(moonAbs, date.year + '-' + date.month + '-' + date.day);
+      var dashaFormatted = formatDashaLocal(dashaList);
+      if (dashaFormatted) {
+        result.dasha = dashaFormatted;
+        console.log('Local Dasha calculated:', dashaFormatted.split('\n')[0]);
+      }
     }
 
     console.log('Chart result:', JSON.stringify(result));
