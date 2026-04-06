@@ -371,37 +371,75 @@ function formatDashaLocal(dashas) {
   var now = new Date();
   var result = '';
   var cutoff = now.getFullYear() + 40;
+  var DASHA_LORDS = ['Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'];
+  var DASHA_YEARS = [7, 20, 6, 10, 7, 18, 16, 19, 17];
 
+  // Helper: format date as "Mon YYYY"
+  function fmtDate(d) {
+    return d.toLocaleDateString('en-IN', { month: 'short', year: 'numeric' });
+  }
+
+  // Helper: calculate all 9 antardashas for a given mahadasha
+  function getAntardashas(maha) {
+    var mIdx = DASHA_LORDS.indexOf(maha.planet);
+    var antarCursor = new Date(maha.start);
+    var antarList = [];
+    for (var j = 0; j < 9; j++) {
+      var aIdx = (mIdx + j) % 9;
+      var aFrac = DASHA_YEARS[aIdx] / 120;
+      var aDays = maha.years * 365.25 * aFrac;
+      var aStart = new Date(antarCursor);
+      antarCursor = new Date(antarCursor.getTime() + aDays * 86400000);
+      var aEnd = new Date(antarCursor);
+      antarList.push({ planet: DASHA_LORDS[aIdx], start: aStart, end: aEnd });
+    }
+    return antarList;
+  }
+
+  // All mahadashas (current + future within cutoff)
   for (var i = 0; i < dashas.length; i++) {
     var d = dashas[i];
-    if (now >= d.start && now <= d.end) {
-      result += 'CURRENT MAHADASHA: ' + d.planet + ' Mahadasha (until ' + d.end.getFullYear() + ')\n';
-      // Calculate antardashas within current mahadasha
-      var DASHA_LORDS = ['Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'];
-      var DASHA_YEARS = [7, 20, 6, 10, 7, 18, 16, 19, 17];
-      var MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
-      var mIdx = DASHA_LORDS.indexOf(d.planet);
-      var antarCursor = new Date(d.start);
-      for (var j = 0; j < 9; j++) {
-        var aIdx = (mIdx + j) % 9;
-        var aFrac = DASHA_YEARS[aIdx] / 120;
-        var aDays = d.years * 365.25 * aFrac;
-        var aStart = new Date(antarCursor);
-        antarCursor = new Date(antarCursor.getTime() + aDays * 86400000);
-        var aEnd = new Date(antarCursor);
-        if (now >= aStart && now <= aEnd) {
-          result += 'CURRENT ANTARDASHA: ' + DASHA_LORDS[aIdx] + ' Antardasha (until ' + aEnd.toLocaleDateString('en-IN', {month:'short',year:'numeric'}) + ')\n';
+    // Skip fully past mahadashas
+    if (d.end.getFullYear() < now.getFullYear()) continue;
+    if (d.start.getFullYear() > cutoff) break;
+
+    var isCurrMaha = (now >= d.start && now <= d.end);
+    result += (isCurrMaha ? '>>> CURRENT: ' : '    ') +
+      d.planet + ' Mahadasha (' + fmtDate(d.start) + ' - ' + fmtDate(d.end) + ')' +
+      (isCurrMaha ? ' (ACTIVE NOW)' : '') + '\n';
+
+    // All 9 antardashas for this mahadasha
+    var antarList = getAntardashas(d);
+    for (var j = 0; j < antarList.length; j++) {
+      var a = antarList[j];
+      var isCurrAntar = isCurrMaha && (now >= a.start && now <= a.end);
+      result += (isCurrAntar ? '    >>> CURRENT: ' : '        ') +
+        d.planet + '-' + a.planet + ' Antardasha: ' +
+        fmtDate(a.start) + ' - ' + fmtDate(a.end) +
+        (isCurrAntar ? ' (ACTIVE NOW)' : '') + '\n';
+
+      // Pratyantar dashas only for current antardasha
+      if (isCurrAntar) {
+        result += '        PRATYANTAR DASHAS within ' + d.planet + '-' + a.planet + ':\n';
+        var pIdx = DASHA_LORDS.indexOf(a.planet);
+        var pratCursor = new Date(a.start);
+        var aDurationDays = (a.end - a.start) / 86400000;
+        for (var k = 0; k < 9; k++) {
+          var pIdx2 = (pIdx + k) % 9;
+          var pFrac = DASHA_YEARS[pIdx2] / 120;
+          var pDays = aDurationDays * pFrac;
+          var pStart = new Date(pratCursor);
+          pratCursor = new Date(pratCursor.getTime() + pDays * 86400000);
+          var pEnd = new Date(pratCursor);
+          var isPCurrent = (now >= pStart && now <= pEnd);
+          result += '          ' + (isPCurrent ? '* ' : '  ') +
+            d.planet + '-' + a.planet + '-' + DASHA_LORDS[pIdx2] + ': ' +
+            fmtDate(pStart) + ' - ' + fmtDate(pEnd) +
+            (isPCurrent ? ' (ACTIVE)' : '') + '\n';
         }
       }
     }
-  }
-
-  result += 'FULL DASHA TIMELINE:\n';
-  for (var k = 0; k < dashas.length; k++) {
-    var da = dashas[k];
-    if (da.end.getFullYear() >= now.getFullYear() && da.start.getFullYear() <= cutoff) {
-      result += da.planet + ' Mahadasha: ' + da.start.getFullYear() + ' - ' + da.end.getFullYear() + '\n';
-    }
+    result += '\n';
   }
   return result || null;
 }
