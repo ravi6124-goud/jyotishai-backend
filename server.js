@@ -201,7 +201,7 @@ const CITIES = {
   'faizabad': [26.7922, 82.1998], 'bahraich': [27.5743, 81.5958],
   'sitapur': [27.5631, 80.6817], 'hardoi': [27.3956, 80.1264],
   'unnao': [26.5479, 80.4896], 'rae bareli': [26.2309, 81.2329],
-  // More MP  
+  // More MP
   'chhindwara': [22.0574, 78.9382], 'balaghat': [21.8124, 80.1853],
   'seoni': [22.0850, 79.5381], 'mandla': [22.5982, 80.3749],
   'hoshangabad': [22.7547, 77.7270], 'betul': [21.9001, 77.9010],
@@ -215,7 +215,7 @@ const CITIES = {
   'anand': [22.5645, 72.9289], 'kheda': [22.7520, 72.6846],
   'mehsana': [23.5879, 72.3693], 'patan': [23.8493, 72.1266],
   'banaskantha': [24.1742, 72.4328], 'sabarkantha': [23.3667, 73.0167],
-  'gandhinagar': [23.2156, 72.6369], 'dahod': [22.8357, 74.2569],
+  'dahod': [22.8357, 74.2569],
   // More Bihar
   'bhagalpur': [25.2444, 86.9722], 'munger': [25.3728, 86.4742],
   'begusarai': [25.4182, 86.1272], 'samastipur': [25.8620, 85.7813],
@@ -316,12 +316,8 @@ var RASHIS = [
   'Dhanu (Sagittarius)', 'Makar (Capricorn)', 'Kumbh (Aquarius)', 'Meen (Pisces)'
 ];
 
-// planet id 0=sun,1=moon,2=mars,3=mercury,4=jupiter,5=venus,6=saturn
-// lagna = id 100 or ascendant
-
+// ===== VIMSHOTTARI DASHA CALCULATION (FIXED) =====
 function calculateDashaLocal(moonDegree, birthDate) {
-  // Vimshottari Dasha calculation using Moon's Nakshatra
-  // 27 Nakshatras, each 13.333 degrees
   var DASHA_LORDS = ['Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'];
   var DASHA_YEARS = [7, 20, 6, 10, 7, 18, 16, 19, 17]; // Total 120 years
   var NAK_LORDS = [
@@ -347,22 +343,22 @@ function calculateDashaLocal(moonDegree, birthDate) {
   var currentDashaYears = DASHA_YEARS[lordIdx];
   var yearsElapsed = fractionElapsed * currentDashaYears;
 
-  // Birth date
   var birth = new Date(birthDate);
-  var birthMs = birth.getTime();
 
-  // Build dasha timeline from birth
-  var dashas = [];
-  var cursor = new Date(birth);
-  // Go back to start of current dasha
-  cursor.setFullYear(cursor.getFullYear() - yearsElapsed);
+  // ✅ FIXED: Use milliseconds for precise decimal year calculation
+  // setFullYear() loses precision with decimal years — use ms arithmetic instead
+  var MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
+  var dashaStartMs = birth.getTime() - (yearsElapsed * MS_PER_YEAR);
+  var cursor = new Date(dashaStartMs);
+
   var startLordIdx = lordIdx;
+  var dashas = [];
 
   for (var i = 0; i < 9; i++) {
     var idx = (startLordIdx + i) % 9;
     var years = DASHA_YEARS[idx];
     var dashaStart = new Date(cursor);
-    cursor.setFullYear(cursor.getFullYear() + years);
+    cursor = new Date(cursor.getTime() + years * MS_PER_YEAR);
     var dashaEnd = new Date(cursor);
     dashas.push({ planet: DASHA_LORDS[idx], start: dashaStart, end: dashaEnd, years: years });
   }
@@ -383,6 +379,7 @@ function formatDashaLocal(dashas) {
       // Calculate antardashas within current mahadasha
       var DASHA_LORDS = ['Ketu','Venus','Sun','Moon','Mars','Rahu','Jupiter','Saturn','Mercury'];
       var DASHA_YEARS = [7, 20, 6, 10, 7, 18, 16, 19, 17];
+      var MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000;
       var mIdx = DASHA_LORDS.indexOf(d.planet);
       var antarCursor = new Date(d.start);
       for (var j = 0; j < 9; j++) {
@@ -390,7 +387,7 @@ function formatDashaLocal(dashas) {
         var aFrac = DASHA_YEARS[aIdx] / 120;
         var aDays = d.years * 365.25 * aFrac;
         var aStart = new Date(antarCursor);
-        antarCursor.setTime(antarCursor.getTime() + aDays * 86400000);
+        antarCursor = new Date(antarCursor.getTime() + aDays * 86400000);
         var aEnd = new Date(antarCursor);
         if (now >= aStart && now <= aEnd) {
           result += 'CURRENT ANTARDASHA: ' + DASHA_LORDS[aIdx] + ' Antardasha (until ' + aEnd.toLocaleDateString('en-IN', {month:'short',year:'numeric'}) + ')\n';
@@ -522,8 +519,6 @@ async function calculateChart(dob, birth_time, birth_place) {
     if (Array.isArray(data.output) && data.output.length > 0) console.log('First item:', JSON.stringify(data.output[0]).substring(0, 300));
 
     // Extract Sun, Moon, Ascendant
-    // API returns {statusCode, output} where output is OBJECT with named keys
-    // e.g. output.Sun, output.Moon, output.Ascendant
     var output = data.output || {};
     console.log('Output keys:', Object.keys(output).slice(0, 10));
 
@@ -567,8 +562,6 @@ async function calculateChart(dob, birth_time, birth_place) {
     // Build result
     var result = {};
 
-    // Use zodiac_sign_name directly from API - it's accurate!
-    // Map English name to Sanskrit/Hindi + English format
     var SIGN_MAP = {
       'Aries': 'Mesh (Aries)', 'Taurus': 'Vrishabh (Taurus)',
       'Gemini': 'Mithun (Gemini)', 'Cancer': 'Kark (Cancer)',
