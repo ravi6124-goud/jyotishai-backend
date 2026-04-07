@@ -639,22 +639,24 @@ async function calculateChart(dob, birth_time, birth_place) {
     result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
     result.source = 'FreeAstrologyAPI - Lahiri Ayanamsa';
 
-    // Calculate Dasha locally using Swiss Ephemeris Moon position
-    if (result.moon_degrees) {
-      var moonDeg = parseFloat(result.moon_degrees);
-      // Convert moon degrees to absolute (0-360)
-      var moonSignIdx = Object.values(SIGN_MAP).indexOf(result.moon_rashi);
-      // Get absolute moon degree from normDegree + sign offset
-      var moonAbs = moonDeg;
-      if (moonData) {
-        var fullDeg = moonData.fullDegree || moonData.normDegree || moonDeg;
-        moonAbs = ((parseFloat(fullDeg) % 360) + 360) % 360;
-      }
+    // Calculate Dasha using sign index + normDegree (reliable, no API fullDegree dependency)
+    if (result.moon_rashi && result.moon_degrees) {
+      var SIGN_ORDER = [
+        'Mesh (Aries)', 'Vrishabh (Taurus)', 'Mithun (Gemini)', 'Kark (Cancer)',
+        'Simha (Leo)', 'Kanya (Virgo)', 'Tula (Libra)', 'Vrishchik (Scorpio)',
+        'Dhanu (Sagittarius)', 'Makar (Capricorn)', 'Kumbh (Aquarius)', 'Meen (Pisces)'
+      ];
+      var moonSignIdx = SIGN_ORDER.indexOf(result.moon_rashi);
+      var moonNormDeg = parseFloat(result.moon_degrees);
+      // Absolute degree = sign offset (every sign = 30 deg) + degrees within sign
+      var moonAbs = (moonSignIdx >= 0 ? moonSignIdx * 30 : 0) + moonNormDeg;
+      moonAbs = ((moonAbs % 360) + 360) % 360;
+      console.log('Moon abs deg:', moonAbs, '| sign:', result.moon_rashi, '| idx:', moonSignIdx, '| norm:', moonNormDeg);
       var dashaList = calculateDashaLocal(moonAbs, date.year + '-' + date.month + '-' + date.day);
       var dashaFormatted = formatDashaLocal(dashaList);
       if (dashaFormatted) {
         result.dasha = dashaFormatted;
-        console.log('Local Dasha calculated:', dashaFormatted.split('\n')[0]);
+        console.log('Dasha calculated:', dashaFormatted.split('\n')[0]);
       }
     }
 
