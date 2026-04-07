@@ -862,41 +862,62 @@ app.post('/forgot-password', async function(req, res) {
     var expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
     otpStore[email] = { otp, expiry };
 
-    // Send email via Resend
+    // Send email via Resend using https module (more reliable on Render)
     console.log('RESEND_KEY present:', RESEND_KEY ? 'YES (len:' + RESEND_KEY.length + ')' : 'NO');
     console.log('Sending OTP to:', email);
-    var emailRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': 'Bearer ' + RESEND_KEY
-      },
-      body: JSON.stringify({
-        from: 'JyotishAI <noreply@askjyotishai.com>',
-        to: email,
-        subject: 'JyotishAI - Password Reset OTP',
-        html: '<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;background:#1a0533;color:#fff;border-radius:12px;">' +
-          '<div style="text-align:center;margin-bottom:20px;">' +
-          '<h1 style="color:#f5a623;font-size:28px;margin:0;">🕉 JyotishAI</h1></div>' +
-          '<h2 style="color:#f5a623;">Password Reset OTP</h2>' +
-          '<p>Namaste! Your OTP for password reset is:</p>' +
-          '<div style="background:#2d0a4e;padding:20px;border-radius:8px;text-align:center;margin:20px 0;">' +
-          '<h1 style="color:#f5a623;font-size:42px;letter-spacing:8px;margin:0;">' + otp + '</h1></div>' +
-          '<p style="color:#ccc;">This OTP is valid for <strong style="color:#f5a623;">10 minutes</strong> only.</p>' +
-          '<p style="color:#ccc;">If you did not request this, please ignore this email.</p>' +
-          '<p style="color:#888;font-size:12px;margin-top:20px;">Note: Jyotish is for spiritual guidance only.</p></div>'
-      })
+
+    var emailHtml = '<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;background:#1a0533;color:#fff;border-radius:12px;">' +
+      '<div style="text-align:center;margin-bottom:20px;">' +
+      '<h1 style="color:#f5a623;font-size:28px;margin:0;">JyotishAI</h1></div>' +
+      '<h2 style="color:#f5a623;">Password Reset OTP</h2>' +
+      '<p>Namaste! Your OTP for password reset is:</p>' +
+      '<div style="background:#2d0a4e;padding:20px;border-radius:8px;text-align:center;margin:20px 0;">' +
+      '<h1 style="color:#f5a623;font-size:42px;letter-spacing:8px;margin:0;">' + otp + '</h1></div>' +
+      '<p style="color:#ccc;">This OTP is valid for <strong style="color:#f5a623;">10 minutes</strong> only.</p>' +
+      '<p style="color:#ccc;">If you did not request this, please ignore this email.</p>' +
+      '<p style="color:#888;font-size:12px;margin-top:20px;">Note: Jyotish is for spiritual guidance only.</p></div>';
+
+    var emailPayload = JSON.stringify({
+      from: 'JyotishAI <noreply@askjyotishai.com>',
+      to: email,
+      subject: 'JyotishAI - Password Reset OTP',
+      html: emailHtml
     });
 
-    console.log('Resend response status:', emailRes.status);
-    var resendBody = await emailRes.json();
-    console.log('Resend response body:', JSON.stringify(resendBody));
-    if (!emailRes.ok) {
-      console.error('Resend error:', resendBody);
-      return res.status(500).json({ error: 'Email bhejne mein problem aayi: ' + (resendBody.message || resendBody.name || JSON.stringify(resendBody)) });
-    }
+    await new Promise(function(resolve, reject) {
+      var https = require('https');
+      var options = {
+        hostname: 'api.resend.com',
+        port: 443,
+        path: '/emails',
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + RESEND_KEY,
+          'Content-Length': Buffer.byteLength(emailPayload)
+        }
+      };
+      var req = https.request(options, function(res2) {
+        var data = '';
+        res2.on('data', function(chunk) { data += chunk; });
+        res2.on('end', function() {
+          console.log('Resend status:', res2.statusCode, '| body:', data);
+          if (res2.statusCode >= 200 && res2.statusCode < 300) {
+            resolve(data);
+          } else {
+            reject(new Error('Resend error ' + res2.statusCode + ': ' + data));
+          }
+        });
+      });
+      req.on('error', function(e) {
+        console.error('HTTPS request error:', e.message);
+        reject(e);
+      });
+      req.write(emailPayload);
+      req.end();
+    });
 
-    console.log('OTP sent to:', email, '| OTP:', otp);
+    console.log('OTP sent successfully to:', email, '| OTP:', otp);
     res.json({ success: true, message: 'OTP sent! Check your email.' });
   } catch(e) {
     console.error('Forgot password error:', e.message);
