@@ -863,6 +863,8 @@ app.post('/forgot-password', async function(req, res) {
     otpStore[email] = { otp, expiry };
 
     // Send email via Resend
+    console.log('RESEND_KEY present:', RESEND_KEY ? 'YES (len:' + RESEND_KEY.length + ')' : 'NO');
+    console.log('Sending OTP to:', email);
     var emailRes = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
@@ -886,10 +888,12 @@ app.post('/forgot-password', async function(req, res) {
       })
     });
 
+    console.log('Resend response status:', emailRes.status);
+    var resendBody = await emailRes.json();
+    console.log('Resend response body:', JSON.stringify(resendBody));
     if (!emailRes.ok) {
-      var errData = await emailRes.json();
-      console.error('Resend error:', errData);
-      return res.status(500).json({ error: 'Email bhejne mein problem aayi. Dobara try karo.' });
+      console.error('Resend error:', resendBody);
+      return res.status(500).json({ error: 'Email bhejne mein problem aayi: ' + (resendBody.message || resendBody.name || JSON.stringify(resendBody)) });
     }
 
     console.log('OTP sent to:', email, '| OTP:', otp);
