@@ -868,10 +868,15 @@ app.post('/forgot-password', async function(req, res) {
     console.log('Sending OTP to:', email);
     var nodemailer = require('nodemailer');
     var transporter = nodemailer.createTransport({
-      service: 'gmail',
+      host: 'smtp.gmail.com',
+      port: 465,
+      secure: true,
       auth: {
         user: GMAIL_USER,
         pass: GMAIL_PASS
+      },
+      tls: {
+        rejectUnauthorized: false
       }
     });
 
@@ -896,8 +901,8 @@ app.post('/forgot-password', async function(req, res) {
     console.log('OTP sent successfully to:', email, '| OTP:', otp);
     res.json({ success: true, message: 'OTP sent! Check your email.' });
   } catch(e) {
-    console.error('Forgot password error:', e.message);
-    res.status(500).json({ error: e.message });
+    console.error('Forgot password error FULL:', e);
+    res.status(500).json({ error: e.message || 'Email send failed' });
   }
 });
 
