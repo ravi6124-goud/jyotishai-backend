@@ -22,6 +22,8 @@ const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const ASTRO_KEY = process.env.ASTRO_API_KEY;
 const RESEND_KEY = process.env.RESEND_API_KEY;
+const GMAIL_USER = process.env.GMAIL_USER;
+const GMAIL_PASS = process.env.GMAIL_PASS;
 
 // In-memory OTP store {email: {otp, expiry}}
 var otpStore = {};
@@ -862,13 +864,20 @@ app.post('/forgot-password', async function(req, res) {
     var expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
     otpStore[email] = { otp, expiry };
 
-    // Send email via Resend using https module (more reliable on Render)
-    console.log('RESEND_KEY present:', RESEND_KEY ? 'YES (len:' + RESEND_KEY.length + ')' : 'NO');
+    // Send email via Gmail SMTP using nodemailer
     console.log('Sending OTP to:', email);
+    var nodemailer = require('nodemailer');
+    var transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: GMAIL_USER,
+        pass: GMAIL_PASS
+      }
+    });
 
     var emailHtml = '<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;background:#1a0533;color:#fff;border-radius:12px;">' +
       '<div style="text-align:center;margin-bottom:20px;">' +
-      '<h1 style="color:#f5a623;font-size:28px;margin:0;">JyotishAI</h1></div>' +
+      '<h1 style="color:#f5a623;font-size:28px;margin:0;">🕉 JyotishAI</h1></div>' +
       '<h2 style="color:#f5a623;">Password Reset OTP</h2>' +
       '<p>Namaste! Your OTP for password reset is:</p>' +
       '<div style="background:#2d0a4e;padding:20px;border-radius:8px;text-align:center;margin:20px 0;">' +
@@ -877,44 +886,11 @@ app.post('/forgot-password', async function(req, res) {
       '<p style="color:#ccc;">If you did not request this, please ignore this email.</p>' +
       '<p style="color:#888;font-size:12px;margin-top:20px;">Note: Jyotish is for spiritual guidance only.</p></div>';
 
-    var emailPayload = JSON.stringify({
-      from: 'JyotishAI <noreply@askjyotishai.com>',
+    await transporter.sendMail({
+      from: '"JyotishAI" <' + GMAIL_USER + '>',
       to: email,
       subject: 'JyotishAI - Password Reset OTP',
       html: emailHtml
-    });
-
-    await new Promise(function(resolve, reject) {
-      var https = require('https');
-      var options = {
-        hostname: 'api.resend.com',
-        port: 443,
-        path: '/emails',
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': 'Bearer ' + RESEND_KEY,
-          'Content-Length': Buffer.byteLength(emailPayload)
-        }
-      };
-      var req = https.request(options, function(res2) {
-        var data = '';
-        res2.on('data', function(chunk) { data += chunk; });
-        res2.on('end', function() {
-          console.log('Resend status:', res2.statusCode, '| body:', data);
-          if (res2.statusCode >= 200 && res2.statusCode < 300) {
-            resolve(data);
-          } else {
-            reject(new Error('Resend error ' + res2.statusCode + ': ' + data));
-          }
-        });
-      });
-      req.on('error', function(e) {
-        console.error('HTTPS request error:', e.message);
-        reject(e);
-      });
-      req.write(emailPayload);
-      req.end();
     });
 
     console.log('OTP sent successfully to:', email, '| OTP:', otp);
