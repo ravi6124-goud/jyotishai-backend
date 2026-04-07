@@ -21,6 +21,10 @@ const SUPABASE_URL = 'https://mqbpmjnufegoyrizarsf.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_KEY;
 const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
 const ASTRO_KEY = process.env.ASTRO_API_KEY;
+const RESEND_KEY = process.env.RESEND_API_KEY;
+
+// In-memory OTP store {email: {otp, expiry}}
+var otpStore = {};
 
 // ===== SWISS EPHEMERIS FALLBACK CALCULATION =====
 function calculateWithSwisseph(date, time, place) {
@@ -838,6 +842,91 @@ app.post('/chat', async function(req, res) {
   } catch(e) {
     console.error('Chat error:', e.message);
     res.status(500).json({ error: 'Server error: ' + e.message });
+  }
+});
+
+// ===== FORGOT PASSWORD ROUTES =====
+
+app.post('/forgot-password', async function(req, res) {
+  try {
+    var { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email zaroori hai!' });
+    email = email.toLowerCase().trim();
+
+    // Check if user exists
+    var users = await supabase('users', 'GET', null, '?email=eq.' + encodeURIComponent(email) + '&select=id,full_name');
+    if (!users || users.length === 0) return res.status(404).json({ error: 'Yeh email registered nahi hai!' });
+
+    // Generate 6 digit OTP
+    var otp = Math.floor(100000 + Math.random() * 900000).toString();
+    var expiry = Date.now() + 10 * 60 * 1000; // 10 minutes
+    otpStore[email] = { otp, expiry };
+
+    // Send email via Resend
+    var emailRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + RESEND_KEY
+      },
+      body: JSON.stringify({
+        from: 'JyotishAI <onboarding@resend.dev>',
+        to: email,
+        subject: 'JyotishAI - Password Reset OTP',
+        html: '<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;background:#1a0533;color:#fff;border-radius:12px;">' +
+          '<div style="text-align:center;margin-bottom:20px;">' +
+          '<h1 style="color:#f5a623;font-size:28px;margin:0;">🕉 JyotishAI</h1></div>' +
+          '<h2 style="color:#f5a623;">Password Reset OTP</h2>' +
+          '<p>Namaste! Your OTP for password reset is:</p>' +
+          '<div style="background:#2d0a4e;padding:20px;border-radius:8px;text-align:center;margin:20px 0;">' +
+          '<h1 style="color:#f5a623;font-size:42px;letter-spacing:8px;margin:0;">' + otp + '</h1></div>' +
+          '<p style="color:#ccc;">This OTP is valid for <strong style="color:#f5a623;">10 minutes</strong> only.</p>' +
+          '<p style="color:#ccc;">If you did not request this, please ignore this email.</p>' +
+          '<p style="color:#888;font-size:12px;margin-top:20px;">Note: Jyotish is for spiritual guidance only.</p></div>'
+      })
+    });
+
+    if (!emailRes.ok) {
+      var errData = await emailRes.json();
+      console.error('Resend error:', errData);
+      return res.status(500).json({ error: 'Email bhejne mein problem aayi. Dobara try karo.' });
+    }
+
+    console.log('OTP sent to:', email, '| OTP:', otp);
+    res.json({ success: true, message: 'OTP sent! Check your email.' });
+  } catch(e) {
+    console.error('Forgot password error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.post('/verify-otp', async function(req, res) {
+  try {
+    var { email, otp, new_password } = req.body;
+    if (!email || !otp || !new_password) return res.status(400).json({ error: 'Email, OTP aur naya password chahiye!' });
+    email = email.toLowerCase().trim();
+
+    // Check OTP
+    var stored = otpStore[email];
+    if (!stored) return res.status(400).json({ error: 'OTP nahi mila. Pehle forgot password karo.' });
+    if (Date.now() > stored.expiry) {
+      delete otpStore[email];
+      return res.status(400).json({ error: 'OTP expire ho gaya! Dobara try karo.' });
+    }
+    if (stored.otp !== otp.toString().trim()) return res.status(400).json({ error: 'Galat OTP! Dobara check karo.' });
+    if (new_password.length < 6) return res.status(400).json({ error: 'Password min 6 characters hona chahiye!' });
+
+    // Update password
+    var updated = await supabase('users', 'PATCH', { password_hash: hashPassword(new_password) }, '?email=eq.' + encodeURIComponent(email));
+    if (!updated) return res.status(500).json({ error: 'Password update nahi hua.' });
+
+    // Clear OTP
+    delete otpStore[email];
+    console.log('Password reset successful for:', email);
+    res.json({ success: true, message: 'Password successfully reset! Ab login karo.' });
+  } catch(e) {
+    console.error('Verify OTP error:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
