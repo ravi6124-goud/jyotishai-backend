@@ -870,7 +870,7 @@ app.post('/forgot-password', async function(req, res) {
         'Authorization': 'Bearer ' + RESEND_KEY
       },
       body: JSON.stringify({
-        from: 'JyotishAI <onboarding@resend.dev>',
+        from: 'JyotishAI <noreply@askjyotishai.com>',
         to: email,
         subject: 'JyotishAI - Password Reset OTP',
         html: '<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;background:#1a0533;color:#fff;border-radius:12px;">' +
