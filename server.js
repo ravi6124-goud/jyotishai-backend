@@ -958,7 +958,7 @@ app.post('/verify-otp', async function(req, res) {
 // Keep alive
 setInterval(async function() {
   try { await fetch('https://jyotishai-backend.onrender.com/ping'); console.log('Keep alive ping sent'); } catch(e) {}
-}, 14 * 60 * 1000);
+}, 9 * 60 * 1000); // 9 min - keeps Render free tier alive (spins down after 15 min)
 
 var PORT = process.env.PORT || 3000;
 app.listen(PORT, '0.0.0.0', function() {
