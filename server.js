@@ -639,8 +639,16 @@ async function calculateChart(dob, birth_time, birth_place) {
     result.location = cleanPlace + ' (' + coords[0].toFixed(4) + 'N, ' + coords[1].toFixed(4) + 'E)';
     result.source = 'FreeAstrologyAPI - Lahiri Ayanamsa';
 
-    // Calculate Dasha using sign index + normDegree (reliable, no API fullDegree dependency)
-    if (result.moon_rashi && result.moon_degrees) {
+    // Calculate Dasha using Swiss Ephemeris for precise Moon degree
+    // FreeAstrologyAPI normDegree can be off by ~0.8 deg causing ~14 month dasha error
+    // Swiss Ephemeris gives exact degree -> correct dasha dates
+    var moonAbsForDasha = null;
+    var swissForDasha = calculateWithSwisseph(date, time, cleanPlace);
+    if (swissForDasha && swissForDasha.moon_abs_deg !== undefined) {
+      moonAbsForDasha = swissForDasha.moon_abs_deg;
+      console.log('Moon abs deg (Swiss Ephemeris - precise):', moonAbsForDasha);
+    } else if (result.moon_rashi && result.moon_degrees) {
+      // Fallback: use API normDegree + sign offset
       var SIGN_ORDER = [
         'Mesh (Aries)', 'Vrishabh (Taurus)', 'Mithun (Gemini)', 'Kark (Cancer)',
         'Simha (Leo)', 'Kanya (Virgo)', 'Tula (Libra)', 'Vrishchik (Scorpio)',
@@ -648,11 +656,12 @@ async function calculateChart(dob, birth_time, birth_place) {
       ];
       var moonSignIdx = SIGN_ORDER.indexOf(result.moon_rashi);
       var moonNormDeg = parseFloat(result.moon_degrees);
-      // Absolute degree = sign offset (every sign = 30 deg) + degrees within sign
-      var moonAbs = (moonSignIdx >= 0 ? moonSignIdx * 30 : 0) + moonNormDeg;
-      moonAbs = ((moonAbs % 360) + 360) % 360;
-      console.log('Moon abs deg:', moonAbs, '| sign:', result.moon_rashi, '| idx:', moonSignIdx, '| norm:', moonNormDeg);
-      var dashaList = calculateDashaLocal(moonAbs, date.year + '-' + date.month + '-' + date.day);
+      moonAbsForDasha = (moonSignIdx >= 0 ? moonSignIdx * 30 : 0) + moonNormDeg;
+      moonAbsForDasha = ((moonAbsForDasha % 360) + 360) % 360;
+      console.log('Moon abs deg (API fallback):', moonAbsForDasha, '| sign:', result.moon_rashi, '| norm:', moonNormDeg);
+    }
+    if (moonAbsForDasha !== null) {
+      var dashaList = calculateDashaLocal(moonAbsForDasha, date.year + '-' + date.month + '-' + date.day);
       var dashaFormatted = formatDashaLocal(dashaList);
       if (dashaFormatted) {
         result.dasha = dashaFormatted;
