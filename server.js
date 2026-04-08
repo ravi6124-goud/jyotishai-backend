@@ -866,24 +866,9 @@ app.post('/forgot-password', async function(req, res) {
 
     // Send email via Gmail SMTP using nodemailer
     console.log('Sending OTP to:', email);
-    var nodemailer = require('nodemailer');
-    var transporter = nodemailer.createTransport({
-      host: 'smtp.gmail.com',
-      port: 587,
-      secure: false,
-      auth: {
-        user: GMAIL_USER,
-        pass: GMAIL_PASS
-      },
-      tls: {
-        rejectUnauthorized: false,
-        ciphers: 'SSLv3'
-      }
-    });
-
     var emailHtml = '<div style="font-family:Arial,sans-serif;max-width:400px;margin:0 auto;padding:20px;background:#1a0533;color:#fff;border-radius:12px;">' +
       '<div style="text-align:center;margin-bottom:20px;">' +
-      '<h1 style="color:#f5a623;font-size:28px;margin:0;">🕉 JyotishAI</h1></div>' +
+      '<h1 style="color:#f5a623;font-size:28px;margin:0;">JyotishAI</h1></div>' +
       '<h2 style="color:#f5a623;">Password Reset OTP</h2>' +
       '<p>Namaste! Your OTP for password reset is:</p>' +
       '<div style="background:#2d0a4e;padding:20px;border-radius:8px;text-align:center;margin:20px 0;">' +
@@ -892,11 +877,48 @@ app.post('/forgot-password', async function(req, res) {
       '<p style="color:#ccc;">If you did not request this, please ignore this email.</p>' +
       '<p style="color:#888;font-size:12px;margin-top:20px;">Note: Jyotish is for spiritual guidance only.</p></div>';
 
-    await transporter.sendMail({
-      from: '"JyotishAI" <' + GMAIL_USER + '>',
-      to: email,
-      subject: 'JyotishAI - Password Reset OTP',
-      html: emailHtml
+    // Send via Resend API using Node.js https module
+    await new Promise(function(resolve, reject) {
+      var https = require('https');
+      var payload = JSON.stringify({
+        from: 'JyotishAI <noreply@askjyotishai.com>',
+        to: [email],
+        subject: 'JyotishAI - Password Reset OTP',
+        html: emailHtml
+      });
+      var options = {
+        hostname: 'api.resend.com',
+        port: 443,
+        path: '/emails',
+        method: 'POST',
+        headers: {
+          'Authorization': 'Bearer ' + RESEND_KEY,
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload)
+        }
+      };
+      var req = https.request(options, function(resp) {
+        var body = '';
+        resp.on('data', function(chunk) { body += chunk; });
+        resp.on('end', function() {
+          console.log('Resend response:', resp.statusCode, body);
+          if (resp.statusCode >= 200 && resp.statusCode < 300) {
+            resolve(body);
+          } else {
+            reject(new Error('Resend failed: ' + resp.statusCode + ' ' + body));
+          }
+        });
+      });
+      req.on('error', function(err) {
+        console.error('Resend request error:', err.message);
+        reject(err);
+      });
+      req.setTimeout(15000, function() {
+        req.destroy();
+        reject(new Error('Resend request timeout'));
+      });
+      req.write(payload);
+      req.end();
     });
 
     console.log('OTP sent successfully to:', email, '| OTP:', otp);
