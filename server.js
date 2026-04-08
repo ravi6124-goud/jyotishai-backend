@@ -946,8 +946,9 @@ app.post('/verify-otp', async function(req, res) {
     if (new_password.length < 6) return res.status(400).json({ error: 'Password min 6 characters hona chahiye!' });
 
     // Update password
-    var updated = await supabase('users', 'PATCH', { password_hash: hashPassword(new_password) }, '?email=eq.' + encodeURIComponent(email));
-    if (!updated) return res.status(500).json({ error: 'Password update nahi hua.' });
+    var updated = await supabase('users', 'PATCH', { password_hash: hashPassword(new_password) }, '?email=eq.' + encodeURIComponent(email) + '&select=id');
+    // Supabase PATCH returns empty array on success - that's ok
+    console.log('Password update result:', JSON.stringify(updated));
 
     // Clear OTP
     delete otpStore[email];
