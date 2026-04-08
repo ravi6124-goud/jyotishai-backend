@@ -687,14 +687,21 @@ async function calculateChart(dob, birth_time, birth_place) {
 // ===== SUPABASE =====
 async function supabase(table, method, body, query) {
   var url = SUPABASE_URL + '/rest/v1/' + table + (query || '');
+  var headers = {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_KEY,
+    'Authorization': 'Bearer ' + SUPABASE_KEY,
+    'Prefer': method === 'POST' ? 'return=representation' : 'return=minimal'
+  };
   var res = await fetch(url, {
     method: method || 'GET',
-    headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_KEY,
-      'Authorization': 'Bearer ' + SUPABASE_KEY,
-      'Prefer': method === 'POST' ? 'return=representation' : '' },
+    headers: headers,
     body: body ? JSON.stringify(body) : undefined
   });
-  return res.json();
+  // Handle empty responses (PATCH/DELETE return 204 with no body)
+  var text = await res.text();
+  if (!text || text.trim() === '') return { success: true };
+  try { return JSON.parse(text); } catch(e) { return { success: true, raw: text }; }
 }
 
 function hashPassword(p) {
